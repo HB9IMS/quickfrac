@@ -4,11 +4,15 @@ main document
 
 import colorsys
 
+import gpu
+
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pygame as pg
 from typing_extensions import deprecated
+
+from PIL import Image
 
 import algos as alg
 
@@ -131,20 +135,20 @@ class Fractal:
                 for j in range(height)] for i in range(width)],
             dtype=dtype
         )
-        self.rendered = np.zeros((width, height, 3), dtype=np.uint8)
-        self.rendered_full = np.zeros((width, height, 3), dtype=np.uint32)
+        self.rendered = np.ones((width, height, 3), dtype=np.uint8)
+        self.rendered_full = np.ones((width, height, 3), dtype=np.uint32)
 
-    #@timed
+    @timed
     def iterate(self):
         """
         iterates the fractal
         """
-        self.pixels = alg.newton_step_single(
+        self.pixels[:] = alg.newton_step_single(
             self.pixels,
             self.function
         )
 
-    #@timed
+    @timed
     def render_new(self):
         """faster renderer"""
         h = np.clip((np.angle(self.pixels) % (2 * np.pi)) / 2 / np.pi, 0, 1)
@@ -199,25 +203,41 @@ class Fractal:
 
 
 function = "z ** 3 - 1"
+GPU = True
+GUI = True
 
 
 def test_fractal():
     """test function"""
-    import time
-    pg.init()
-    screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
+    import time, ctypes
+    ctypes.windll.user32.SetProcessDPIAware()
+    f_type = gpu.GPUFractal if GPU else Fractal
+    if GUI:
+        pg.init()
+        screen = pg.display.set_mode((640, 480))  #(0, 0), pg.FULLSCREEN)  # adapt for any screen
 
-    info = pg.display.Info()
+        info = pg.display.Info()
 
-    # Retrieve screen width and height
-    dimensions = (info.current_w, info.current_h)
+        # Retrieve screen width and height
+        dimensions = (info.current_w, info.current_h)
+    else:
+        dimensions = (640, 480)
 
-    fractal = Fractal(
+    x, y = 4, 4
+
+    fractal = f_type(
         dimensions[0], dimensions[1],
         function, symbol="z",
-        frame_points=((-2, -2), (2, 2))
+        frame_points=((-x, -y), (x, y))
     )
     this_time = 0
+    if not GUI:
+        fractal.iterate()
+        fractal.render_new()
+        Image.fromarray(
+            fractal.rendered.transpose(1, 0, 2)
+        ).show()
+        return
     fractal.render_new()
     do_iterate = False
     last_click_pos = None
@@ -228,32 +248,43 @@ def test_fractal():
                 pg.quit()
                 return
             if event.type == pg.KEYDOWN:
-                if event.key == pg.K_ESCAPE:
-                    pg.quit()
-                    return
-                if event.key == pg.K_SPACE:
-                    #fractal.iterate()
-                    #fractal.render_new()
-                    do_iterate = not do_iterate
-                if event.key == pg.K_d:
-                    print(fractal.pixels)
-                if event.key == pg.K_b:
-                    pass  # used for breakpoints
-                if event.key == pg.K_p:
-                    fractal.render_unlimited()
-                    plt.imshow(fractal.rendered_full / np.max(fractal.rendered_full))
-                    plt.show()
-                if event.key == pg.K_r:
-                    fractal = Fractal(
-                        dimensions[0], dimensions[1],
-                        function, symbol="z",
-                        frame_points=((-2, -2), (2, 2))
-                    )
-                    do_iterate = False
-                    last_click_pos = None
-                if event.key == pg.K_RETURN:
-                    fractal.render_new()
-            # get mouse position on button press relative to fractal
+                match event.key:
+                    case pg.K_ESCAPE:
+                        pg.quit()
+                        return
+                    case pg.K_i:
+                        fractal.iterate()
+                        fractal.render_new()
+                    case pg.K_SPACE:
+                        do_iterate = not do_iterate
+                    case pg.K_d:
+                        print(fractal.pixels)
+                    case pg.K_b:
+                        pass  # used for breakpoints
+                    case pg.K_p:
+                        fractal.render_unlimited()
+                        plt.imshow(fractal.rendered_full / np.max(fractal.rendered_full))
+                        plt.show()
+                    case pg.K_s:
+                        Image.fromarray(fractal.rendered).show()
+                    case pg.K_r:
+                        fractal = f_type(
+                            dimensions[0], dimensions[1],
+                            function, symbol="z",
+                            frame_points=((-2, -2), (2, 2))
+                        )
+                        do_iterate = False
+                        last_click_pos = None
+                    case pg.K_RETURN:
+                        fractal.render_new()
+                    case pg.K_c:
+                        if GPU:
+                            fractal.render_cpu()
+                    case pg.K_l:
+                        if GPU:
+                            fractal.iterate_cpu()
+                            fractal.render_new()
+                # get mouse position on button press relative to fractal
             if event.type == pg.MOUSEBUTTONDOWN:
                 pos = pg.mouse.get_pos()
                 pos_ = np.array(pos) / np.array(dimensions)
@@ -264,7 +295,7 @@ def test_fractal():
                 fractal.rendered[pos[0]][pos[1]][1] ^= 0xff
                 fractal.rendered[pos[0]][pos[1]][2] ^= 0xff
                 if last_click_pos is not None and np.any(pos__ != last_click_pos):
-                    fractal = Fractal(
+                    fractal = f_type(
                         dimensions[0], dimensions[1],
                         function, symbol="z",
                         frame_points=(last_click_pos[::-1], pos__[::-1])

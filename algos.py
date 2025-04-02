@@ -52,7 +52,7 @@ class Function:
         self.derivative = sp.diff(sp.sympify(expression), self.symbol)
         self.derivative_function = sp.lambdify(self.symbol, self.derivative)
         self.roots_ = sp.solve(self.derivative, self.symbol)
-        self.roots = [complex(root) for root in self.roots_]
+        self.roots = np.array([complex(root) for root in self.roots_])
         dbg.debug_print(f"roots: {repr(self.roots)}")
         dbg.debug_print(*self.roots, sep="\n")
 
