@@ -1,6 +1,7 @@
 #define TOLERANCE 1e-9
 #define CTYPE double2
 #define DISABLE_SKIP true
+#define cpow_fake cpow  // dylans idee
 
 inline CTYPE mul2(CTYPE a, CTYPE b) {
     return (CTYPE)(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);

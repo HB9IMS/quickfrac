@@ -152,6 +152,7 @@ def sympy_to_opencl(expr_, variable='z'):
     import sympy.printing.c as c_print
 
     # Create a printer that handles complex operations
+    # Claude 3.7 Sonnet
     class OpenCLPrinter(c_print.C89CodePrinter):
         def _print_Pow(self, expr):
             base = expr.base
@@ -183,9 +184,7 @@ def sympy_to_opencl(expr_, variable='z'):
 
             # Case 2: Real number exponent (use cpow function)
             elif exp.is_real and exp.is_number:
-                # We need to use a complex power function for this
-                # First, make sure we have a cpow function in our OpenCL kernel
-                return f"cpow({self._print(base)}, ((CTYPE)({float(exp)}, 0.0)))"
+                return f"cpow_real({self._print(base)}, {float(exp)})"
 
             # Case 3: Complex exponent (general case)
             else:
@@ -220,8 +219,8 @@ def sympy_to_opencl(expr_, variable='z'):
                 # Handle the numeric coefficient as a scalar multiplication
                 if len(complex_terms) == 1:
                     term = complex_terms[0]
-                    return (f"((CTYPE)({numeric_coefficient} * {self._print(term)}.x, "
-                            f"{numeric_coefficient} * {self._print(term)}.y))")
+                    return (f"mul2((CTYPE)({numeric_coefficient}, 0.f), "
+                            f"{self._print(term)})")
                 else:
                     # First multiply the complex terms together
                     result = self._print(complex_terms[0])

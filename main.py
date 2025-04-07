@@ -206,13 +206,14 @@ class Fractal:
                 screen.set_at((i, j), self.rendered[j, i])
 
 
-function = "z ** 3.141 - 1"
+function = "z ** 3 - 1"
 GPU = True
 GUI = True
 FULLSCREEN = True
 
 
 def test_fractal():
+    global function
     """test function"""
     import time, ctypes
     ctypes.windll.user32.SetProcessDPIAware()
@@ -233,7 +234,7 @@ def test_fractal():
     else:
         dimensions = (640, 480)
 
-    x, y = 4, 4
+    x, y = dimensions[1] / 1000, dimensions[0] / 1000
 
     fractal = f_type(
         dimensions[0], dimensions[1],
@@ -281,7 +282,7 @@ def test_fractal():
                         fractal = f_type(
                             dimensions[0], dimensions[1],
                             function, symbol="z",
-                            frame_points=((-2, -2), (2, 2))
+                            frame_points=((-x, -y), (x, y))
                         )
                         do_iterate = False
                         last_click_pos = None
@@ -301,6 +302,13 @@ def test_fractal():
                     case pg.K_y:
                         if GPU:
                             fractal.show_differences()
+                    case pg.K_DOLLAR:
+                        function = input(function)
+                        fractal = f_type(
+                            dimensions[0], dimensions[1],
+                            function, symbol="z",
+                            frame_points=((-x, -y), (x, y))
+                        )
                 # get mouse position on button press relative to fractal
             if event.type == pg.MOUSEBUTTONDOWN:
                 pos = pg.mouse.get_pos()
