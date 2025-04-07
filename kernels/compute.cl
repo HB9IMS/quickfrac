@@ -1,65 +1,111 @@
 #define TOLERANCE 1e-9
+#define CTYPE double2
+#define DISABLE_SKIP true
 
-inline float2 mul2(float2 a, float2 b) {
-    return (float2)(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+inline CTYPE mul2(CTYPE a, CTYPE b) {
+    return (CTYPE)(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+inline double abs2(CTYPE z) {
+    return sqrt(z.x * z.x + z.y * z.y);
 }
 
 
-inline float2 func(float2 z) {
-    return ( mul2( mul2(z, z), z) - 1.0f);
-}
-
-inline float2 deriv(float2 z) {
-    return (3.0f * mul2(z, z));
+CTYPE conj(CTYPE z) {
+    return (CTYPE)(z.x, -z.y);
 }
 
 
-inline float abs2(float2 z) {
-    return z.x * z.x + z.y * z.y;
-}
-
-inline float2 div2(float2 a, float2 b) {
-    float denominator = b.x * b.x + b.y * b.y;
-    float2 result;
-    result.x = (a.x * b.x + a.y * b.y) / denominator;
-    result.y = (a.y * b.x - a.x * b.y) / denominator;
+/*
+w/v
+w*vb/(v*vb)
+(wx+wyi)*(vx-vyi)/|v|^2
+wxvx-wxvyi+vxwyi+wyvy / (vxvx + vyvy)
+*/
+inline CTYPE div2(CTYPE a, CTYPE b) {
+    CTYPE result = (CTYPE)((a.x * b.x + a.y * b.y) / (b.x * b.x + b.y * b.y), 
+                           (a.y * b.x - a.x * b.y) / (b.x * b.x + b.y * b.y));
     return result;
+}
+
+inline CTYPE cpow(CTYPE z, CTYPE w) { // z^w = exp(w * log(z))
+    double r = abs2(z);
+    double theta = atan2(z.y, z.x);
+    CTYPE log_z = (CTYPE)(log(r), theta);
+    
+    CTYPE w_log_z = mul2(w, log_z);
+    
+    // Compute exp(w * log(z))
+    double exp_real = exp(w_log_z.x);
+    double sin_imag = sin(w_log_z.y);
+    double cos_imag = cos(w_log_z.y);
+    
+    return (CTYPE)(exp_real * cos_imag, exp_real * sin_imag);
+}
+
+inline CTYPE cpow_real(CTYPE z, double n) {
+    double r = pow(z.x * z.x + z.y * z.y, n/2.0);
+    double theta = n * atan2(z.y, z.x);
+    return (CTYPE)(r * cos(theta), r * sin(theta));
+}
+
+inline CTYPE func(CTYPE z) {
+    return (CTYPE)($f$);
+}
+
+inline CTYPE deriv(CTYPE z) {
+    return (CTYPE)($d$);
 }
 
 
 __kernel void step(__global double *data, 
                    const int width,
                    __global double *roots,
-                   const int num_roots) {
+                   const int num_roots,
+                   __global double *derivs,
+                   __global double *fvalues) {
 
     int y = get_global_id(0);
     int x = get_global_id(1);
     int id = width * y + x;
 
-    float2 z;
+    CTYPE z;
     z.x = data[id * 2 + 0];
     z.y = data[id * 2 + 1];
 
     bool skip = false;
 
-    for ( int i = 0; i < num_roots; i++ ) {
-        float2 root;
-        root.x = roots[i * 2 + 0];
-        root.y = roots[i * 2 + 1];
-        if (abs2(z - root) < TOLERANCE) { skip = true; }
+    if (!DISABLE_SKIP) {
+        for ( int i = 0; i < num_roots; i++ ) {
+            CTYPE root;
+            root.x = roots[i * 2 + 0];
+            root.y = roots[i * 2 + 1];
+            if (abs2(z - root) <= TOLERANCE) { skip = true; }
+        }
     }
 
-    float2 deriv_ = deriv(z);
+    CTYPE deriv_ = deriv(z);
 
-    if (abs2(deriv_) < TOLERANCE) { skip = true; }
-    if (skip) { return; }
+    CTYPE f_z = func(z);
 
-    float2 f_z = func(z);
+    if (abs2(deriv_) <= TOLERANCE) { skip = true; }
+    if (skip && !DISABLE_SKIP) {  // consistency with cpu version  well that aged like milk...
+        deriv_.x = 1.0;
+        deriv_.y = 0.0;
+        f_z.x = 0.0;
+        f_z.y = 0.0;
+    }
 
-    float2 z_new;
+    CTYPE z_new;
 
     z_new = z - div2(f_z, deriv_);
 
     data[id * 2 + 0] = (double) z_new.x;
     data[id * 2 + 1] = (double) z_new.y;
+
+    fvalues[id * 2 + 0] = (double) f_z.x;
+    fvalues[id * 2 + 1] = (double) f_z.y;
+
+    derivs[id * 2 + 0] = (double) deriv_.x;
+    derivs[id * 2 + 1] = (double) deriv_.y;
 }

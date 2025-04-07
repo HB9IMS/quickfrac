@@ -6,7 +6,7 @@ import colorsys
 
 import gpu
 
-import matplotlib.colors as mcolors
+import matplotlib.colors as mpl_colors
 import matplotlib.pyplot as plt
 import numpy as np
 import pygame as pg
@@ -126,6 +126,8 @@ class Fractal:
         self.width = width
         self.height = height
         self.function = alg.Function(function_, symbol)
+        self._function = function_
+        self._symbol = symbol
         self.dtype = dtype
         self.frame = frame_points
         self.pixels = np.array(
@@ -135,6 +137,8 @@ class Fractal:
                 for j in range(height)] for i in range(width)],
             dtype=dtype
         )
+        self.fvalues = np.zeros_like(self.pixels)
+        self.derivs = np.zeros_like(self.pixels)
         self.rendered = np.ones((width, height, 3), dtype=np.uint8)
         self.rendered_full = np.ones((width, height, 3), dtype=np.uint32)
 
@@ -154,7 +158,7 @@ class Fractal:
         h = np.clip((np.angle(self.pixels) % (2 * np.pi)) / 2 / np.pi, 0, 1)
         s = np.clip(np.ones_like(h), 0, 1)
         v = np.clip(np.abs(self.pixels), 0, 1)
-        rgb = mcolors.hsv_to_rgb(np.dstack((h, s, v)))
+        rgb = mpl_colors.hsv_to_rgb(np.dstack((h, s, v)))
         self.rendered = (rgb * 255).astype(np.uint8)
 
     @timed
@@ -175,7 +179,7 @@ class Fractal:
         s = np.ones_like(h)
         v = np.abs(self.pixels)
         s /= np.max(s)
-        self.rendered_full = mcolors.hsv_to_rgb(np.dstack((h, s, v)))
+        self.rendered_full = mpl_colors.hsv_to_rgb(np.dstack((h, s, v)))
 
     @timed
     @deprecated("use render_unlimited_new(); faster")
@@ -202,9 +206,10 @@ class Fractal:
                 screen.set_at((i, j), self.rendered[j, i])
 
 
-function = "z ** 3 - 1"
+function = "z ** 3.141 - 1"
 GPU = True
 GUI = True
+FULLSCREEN = True
 
 
 def test_fractal():
@@ -214,7 +219,12 @@ def test_fractal():
     f_type = gpu.GPUFractal if GPU else Fractal
     if GUI:
         pg.init()
-        screen = pg.display.set_mode((640, 480))  #(0, 0), pg.FULLSCREEN)  # adapt for any screen
+        if FULLSCREEN:
+            size = (0, 0)
+            screen = pg.display.set_mode(size, pg.FULLSCREEN)  # adapt for any screen
+        else:
+            size = (640, 480)
+            screen = pg.display.set_mode(size)
 
         info = pg.display.Info()
 
@@ -284,6 +294,13 @@ def test_fractal():
                         if GPU:
                             fractal.iterate_cpu()
                             fractal.render_new()
+                    case pg.K_m:
+                        if GPU:
+                            fractal.iterate_cpu()
+                            fractal.render_cpu()
+                    case pg.K_y:
+                        if GPU:
+                            fractal.show_differences()
                 # get mouse position on button press relative to fractal
             if event.type == pg.MOUSEBUTTONDOWN:
                 pos = pg.mouse.get_pos()
