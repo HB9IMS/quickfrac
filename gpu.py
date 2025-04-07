@@ -8,10 +8,10 @@ import pyopencl as cl
 import matplotlib.colors as mpl_colors
 
 import algos
-import main
+import graphical as gp
 
 
-class GPUFractal(main.Fractal):
+class GPUFractal(gp.Fractal):
     """
     A class for a fractal on the GPU
     """
@@ -101,7 +101,6 @@ class GPUFractal(main.Fractal):
                 .replace("$d$", algos.sympy_to_opencl(self.function.derivative))
             ).build()
 
-    @main.timed
     def render_new(self):
         """faster renderer"""
         self.render_program.render(
@@ -135,7 +134,6 @@ class GPUFractal(main.Fractal):
         cl.enqueue_copy(self.queue, self.pixel_buffer, self.pixels)
         self.queue.finish()
 
-    @main.timed
     def iterate(self):
         """
         iterates the fractal

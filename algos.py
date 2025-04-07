@@ -111,11 +111,8 @@ def deriv_newton_step(z, f):
         skip *= np.abs(z - root) < TOLERANCE
     _deriv = f.deriv(z)
     skip *= np.abs(_deriv) < TOLERANCE
-    f_z = f(z)
     # skip
     _deriv += skip
-    f_z *= 1 - skip
-    res = z - f_z / _deriv
     return _deriv
 
 
@@ -136,9 +133,7 @@ def func_newton_step(z, f):
     skip *= np.abs(_deriv) < TOLERANCE
     f_z = f(z)
     # skip
-    _deriv += skip
     f_z *= 1 - skip
-    res = z - f_z / _deriv
     return f_z
 
 

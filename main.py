@@ -2,209 +2,14 @@
 main document
 """
 
-import colorsys
+import sys
 
-import gpu
-
-import matplotlib.colors as mpl_colors
 import matplotlib.pyplot as plt
-import numpy as np
-import pygame as pg
-from typing_extensions import deprecated
-
 from PIL import Image
 
-import algos as alg
-
-
-def unitprint(value, /, unit=None, power=None):
-    """Format a number to engineering units and prefixes."""
-
-    if unit is None:
-        unit = " "
-    original_value = value
-    sign = " "
-    log1000 = 0
-    if value != 0:
-        if value < 0:
-            sign = "-"
-            value *= -1
-        log1000 = np.log10(value) // 3 // (power if power is not None else 1)
-        value *= 1000 ** -log1000
-
-    if abs(log1000) > 6:
-        return f"{sign}{f'{abs(original_value):.3e}': >7}{unit}"
-
-    prefix = {0: "", -1: "m", -2: "µ", -3: "n", -4: "p", -5: "f", -6: "a",
-              1: "k", 2: "M", 3: "G", 4: "T", 5: "P", 6: "E"
-              }[log1000]
-
-    return f"{sign}{f'{value:.3f}': >7} {prefix or ' '}{unit}" \
-           f"{(f'^{power}' if power is not None else '')}"
-
-
-def _lerp(a, b, t):
-    """linear interpolation"""
-    return a + (b - a) * t
-
-
-def mmx(t, a=0., b=255.):
-    """returns the least extreme value"""
-    return min(b, max(a, t))
-
-
-def timed(f):
-    """time a function"""
-    import time
-    def fx(*args, **kwargs):
-        f"""
-        timed function
-        {f.__doc__}"""
-        start = time.perf_counter_ns()
-        res = f(*args, **kwargs)
-        end = time.perf_counter_ns()
-        print(f'{f.__name__} took {unitprint((end - start) / 1e9, "s")}')
-        return res
-
-    return fx
-
-
-def complex_to_rgb(z, scale=1, offset=0.):
-    """
-    converts a complex number to rgb
-    :param z: the complex number
-    :type z: complex
-    :param scale: the scale of the color
-    :type scale: float
-    :param offset: the offset of the color
-    :return: the rgb value
-    :rtype: np.ndarray[np.uint8, ...]
-    """
-    angle = np.angle(z) % (2 * np.pi)  # color
-    mag = np.abs(z) * scale  # brightness
-    assert 0 <= mag, f"mag must be greater than 0, not {mag}"
-    r, g, b = colorsys.hsv_to_rgb(angle / 2 / np.pi, 1, mag)
-    return (
-        np.uint8(mmx(r * 255, 0, 255)),
-        np.uint8(mmx(g * 255, 0, 255)),
-        np.uint8(mmx(b * 255, 0, 255)),
-    )
-
-
-def complex_to_rgb_unlimited(z, scale=1, offset=0.):
-    """
-    converts a complex number to rgb with more than uint8 range
-    """
-    angle = np.angle(z) % (2 * np.pi)  # color
-    mag = np.abs(z) * scale  # brightness
-    assert 0 <= mag, f"mag must be greater than 0, not {mag}"
-    r, g, b = colorsys.hsv_to_rgb(angle / 2 / np.pi, 1, mag)
-    return (r * 255), (g * 255), (b * 255)
-
-
-class Fractal:
-    """Graphical class for a fractal"""
-
-    def __init__(self, width, height,
-                 function_,
-                 frame_points,
-                 symbol="z", dtype=np.complex128):
-        """
-        initializes the fractal
-        :param width: visual width
-        :type width: int
-        :param height: visual height
-        :type height: int
-        :param function_: base function for the next iteration as string
-        :type function_: str
-        :param symbol: the variable to use in the function
-        :type symbol: str
-        :param dtype: the dtype of the pixels
-        :param frame_points: the two corners of the frame
-        :type frame_points: tuple[tuple[complex, complex], ...]
-        """
-        self.width = width
-        self.height = height
-        self.function = alg.Function(function_, symbol)
-        self._function = function_
-        self._symbol = symbol
-        self.dtype = dtype
-        self.frame = frame_points
-        self.pixels = np.array(
-            [[
-                _lerp(self.frame[0][0], self.frame[1][0], j / self.height)
-                + _lerp(self.frame[0][1], self.frame[1][1], i / self.width) * 1j
-                for j in range(height)] for i in range(width)],
-            dtype=dtype
-        )
-        self.fvalues = np.zeros_like(self.pixels)
-        self.derivs = np.zeros_like(self.pixels)
-        self.rendered = np.ones((width, height, 3), dtype=np.uint8)
-        self.rendered_full = np.ones((width, height, 3), dtype=np.uint32)
-
-    @timed
-    def iterate(self):
-        """
-        iterates the fractal
-        """
-        self.pixels[:] = alg.newton_step_single(
-            self.pixels,
-            self.function
-        )
-
-    @timed
-    def render_new(self):
-        """faster renderer"""
-        h = np.clip((np.angle(self.pixels) % (2 * np.pi)) / 2 / np.pi, 0, 1)
-        s = np.clip(np.ones_like(h), 0, 1)
-        v = np.clip(np.abs(self.pixels), 0, 1)
-        rgb = mpl_colors.hsv_to_rgb(np.dstack((h, s, v)))
-        self.rendered = (rgb * 255).astype(np.uint8)
-
-    @timed
-    @deprecated("use render_new(); faster")
-    def render(self):
-        """
-        renders the fractal to internal array
-        """
-        self.rendered = np.array(
-            [[complex_to_rgb(j) for j in i]
-             for i in self.pixels]
-        )
-
-    @timed
-    def render_unlimited(self):
-        """faster renderer"""
-        h = (np.angle(self.pixels) % (2 * np.pi)) / 2 / np.pi
-        s = np.ones_like(h)
-        v = np.abs(self.pixels)
-        s /= np.max(s)
-        self.rendered_full = mpl_colors.hsv_to_rgb(np.dstack((h, s, v)))
-
-    @timed
-    @deprecated("use render_unlimited_new(); faster")
-    def render_unlimited_old(self):
-        """render to more than uint8"""
-        self.rendered_full = np.array(
-            [[complex_to_rgb_unlimited(j) for j in i]
-             for i in self.pixels]
-        )
-
-    # @timed
-    def draw(self, screen):
-        """
-        draws the fractal to the screen provided
-        :param screen: the screen to draw to
-        """
-        pg.surfarray.blit_array(screen, self.rendered)
-
-    @deprecated("use Fractal.draw()")
-    def draw_legacy(self, screen):
-        """deprecated"""
-        for i in range(self.height):
-            for j in range(self.width):
-                screen.set_at((i, j), self.rendered[j, i])
-
+import gpu
+from graphical import *
+from graphical import _convert_point_to_pos, _lerp
 
 function = "z ** 3 - 1"
 GPU = True
@@ -212,7 +17,7 @@ GUI = True
 FULLSCREEN = True
 
 
-def test_fractal():
+def test_fractal(pathfile=sys.stdout):
     global function
     """test function"""
     import time, ctypes
@@ -233,24 +38,54 @@ def test_fractal():
         dimensions = (info.current_w, info.current_h)
     else:
         dimensions = (640, 480)
+        screen = None
 
-    x, y = dimensions[1] / 1000, dimensions[0] / 1000
+    x1, y1 = dimensions[0] / 100, dimensions[1] / 100
+    x2, y2 = -dimensions[0] / 100, -dimensions[1] / 100
+    cx, cy = 0, 0
+    scale = 1
+
+    def update_xy():
+        """update the frame coordinates"""
+        nonlocal x1, x2, y1, y2, cx, cy, scale
+        x, y = dimensions[0] / 100 * scale, dimensions[1] / 100 * scale
+        x1, y1 = cy + x, cx + y
+        x2, y2 = cy - x, cx - y
+
+    update_xy()
 
     fractal = f_type(
         dimensions[0], dimensions[1],
-        function, symbol="z",
-        frame_points=((-x, -y), (x, y))
+        function,
+        frame_points=((x1, y1), (x2, y2))
     )
+
+    def reset_fractal():
+        """resets the fractal"""
+        nonlocal fractal, cx, cy, scale
+        cx, cy = 0, 0
+        scale = 1
+        update_xy()
+        fractal = f_type(dimensions[0], dimensions[1], function, frame_points=((x1, y1), (x2, y2)))
+        if GPU:
+            gpu.cl.enqueue_copy(fractal.queue, fractal.pixel_buffer, fractal.pixels)
+
+    def reset_fractal_no_pos():
+        """resets the fractal without changing position"""
+        nonlocal fractal
+        fractal = f_type(dimensions[0], dimensions[1], function, frame_points=((x1, y1), (x2, y2)))
+
     this_time = 0
     if not GUI:
         fractal.iterate()
         fractal.render_new()
         Image.fromarray(
-            fractal.rendered.transpose(1, 0, 2)
+            fractal.rendered
         ).show()
         return
     fractal.render_new()
     do_iterate = False
+    show_cross = True
     last_click_pos = None
     while True:
         this_time, prev_time = time.perf_counter_ns(), this_time
@@ -277,13 +112,9 @@ def test_fractal():
                         plt.imshow(fractal.rendered_full / np.max(fractal.rendered_full))
                         plt.show()
                     case pg.K_s:
-                        Image.fromarray(fractal.rendered).show()
+                        Image.fromarray(fractal.rendered.transpose(1, 0, 2)).show()
                     case pg.K_r:
-                        fractal = f_type(
-                            dimensions[0], dimensions[1],
-                            function, symbol="z",
-                            frame_points=((-x, -y), (x, y))
-                        )
+                        reset_fractal()
                         do_iterate = False
                         last_click_pos = None
                     case pg.K_RETURN:
@@ -304,27 +135,45 @@ def test_fractal():
                             fractal.show_differences()
                     case pg.K_DOLLAR:
                         function = input(function)
-                        fractal = f_type(
-                            dimensions[0], dimensions[1],
-                            function, symbol="z",
-                            frame_points=((-x, -y), (x, y))
-                        )
+                        reset_fractal()
+                    case pg.K_DOWN:
+                        cy -= 0.1 * scale
+                        update_xy()
+                    case pg.K_UP:
+                        cy += 0.1 * scale
+                        update_xy()
+                    case pg.K_LEFT:
+                        cx += 0.1 * scale
+                        update_xy()
+                    case pg.K_RIGHT:
+                        cx -= 0.1 * scale
+                        update_xy()
+                    case pg.K_PAGEUP:
+                        scale *= 2 ** .5
+                        update_xy()
+                    case pg.K_PAGEDOWN:
+                        scale /= 2 ** .5
+                        update_xy()
+                    case pg.K_TAB:
+                        reset_fractal_no_pos()
+                        fractal.render_new()
+                    case pg.K_END:
+                        print(f"{x1, y1}, {x2, y2}", file=pathfile)
+                    case pg.K_x:
+                        show_cross = not show_cross
                 # get mouse position on button press relative to fractal
-            if event.type == pg.MOUSEBUTTONDOWN:
+            if event.type == pg.MOUSEBUTTONDOWN and False:  # skip because broken_
                 pos = pg.mouse.get_pos()
                 pos_ = np.array(pos) / np.array(dimensions)
-                frame = np.array(fractal.frame)
-                pos__ = _lerp(frame[0], frame[1], pos_)
+                pos__ = [_lerp(x1, x2, pos_[0]), _lerp(y1, y2, pos_[1])]
                 print(pos__)
                 fractal.rendered[pos[0]][pos[1]][0] ^= 0xff
                 fractal.rendered[pos[0]][pos[1]][1] ^= 0xff
                 fractal.rendered[pos[0]][pos[1]][2] ^= 0xff
                 if last_click_pos is not None and np.any(pos__ != last_click_pos):
-                    fractal = f_type(
-                        dimensions[0], dimensions[1],
-                        function, symbol="z",
-                        frame_points=(last_click_pos[::-1], pos__[::-1])
-                    )
+                    fractal = f_type(dimensions[0], dimensions[1], function,
+                                     frame_points=(last_click_pos[::-1], pos__[::-1])
+                                     )
                     print(f"new: {(last_click_pos[::-1], pos__[::-1])}")
                     do_iterate = False
                     last_click_pos = None
@@ -336,9 +185,20 @@ def test_fractal():
             fractal.render_new()
         fractal.draw(screen)
         # draw fps
+        frame = np.array(fractal.frame)
+        xes = (x1, x2)
+        ys = (y1, y2)
+        _point_list = [(_convert_point_to_pos(_y, frame[:, 1], dimensions[0]),
+                        _convert_point_to_pos(_x, frame[:, 0], dimensions[1]))
+                       for _x in xes for _y in ys]
+        for i in _point_list:
+            for j in _point_list:
+                if show_cross:
+                    pg.draw.line(screen, "#ffffff", i, j)
         pg.display.set_caption(str(int(1e9 / (this_time - prev_time))) + ' fps')
         pg.display.flip()
 
 
 if __name__ == '__main__':
-    test_fractal()
+    with open("paths/path.txt", "w") as file:
+        test_fractal(file)

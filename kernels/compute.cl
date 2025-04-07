@@ -11,12 +11,6 @@ inline double abs2(CTYPE z) {
     return sqrt(z.x * z.x + z.y * z.y);
 }
 
-
-CTYPE conj(CTYPE z) {
-    return (CTYPE)(z.x, -z.y);
-}
-
-
 /*
 w/v
 w*vb/(v*vb)

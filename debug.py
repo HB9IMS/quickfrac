@@ -6,7 +6,6 @@
 Debugging utilities
 """
 
-
 import os
 import sys
 
@@ -16,8 +15,8 @@ DEBUG = ((hasattr(sys, 'gettrace')  # check if in debug mode
 print(f"""
 DEBUG TOOL IMPORTED
 DEBUG MODE IS {"ACTIVE" if DEBUG else "INACTIVE"}
-""")
-
+"""
+      )
 
 DEBUG_INITIATOR = "breakpoint"
 
