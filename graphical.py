@@ -107,7 +107,7 @@ class Fractal:
     def __init__(self, width, height,
                  function_,
                  frame_points,
-                 symbol="z", dtype=np.complex128):
+                 symbol="z", dtype=np.complex128, function__=None):
         """
         initializes the fractal
         :param width: visual width
@@ -120,11 +120,16 @@ class Fractal:
         :type symbol: str
         :param dtype: the dtype of the pixels
         :param frame_points: the two corners of the frame
+        :param function__: a function object if available
+        :type function__: alg.Function
         :type frame_points: tuple[tuple[complex, complex], ...]
         """
         self.width = width
         self.height = height
-        self.function = alg.Function(function_, symbol)
+        if function__ is None:
+            self.function = alg.Function(function_, symbol)
+        else:
+            self.function = function__
         self._function = function_
         self._symbol = symbol
         self.dtype = dtype

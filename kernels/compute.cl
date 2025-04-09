@@ -1,4 +1,4 @@
-#define TOLERANCE 1e-9
+#define TOLERANCE 1e-29
 #define CTYPE double2
 #define DISABLE_SKIP true
 #define cpow_fake cpow  // dylans idee
@@ -103,4 +103,67 @@ __kernel void step(__global double *data,
 
     derivs[id * 2 + 0] = (double) deriv_.x;
     derivs[id * 2 + 1] = (double) deriv_.y;
+}
+
+__kernel void step_n(__global double *data,
+                     const int width,
+                     __global double *roots,
+                     const int num_roots,
+                     __global double *derivs,
+                     __global double *fvalues,
+                     const int repetitions) {
+
+    int y = get_global_id(0);
+    int x = get_global_id(1);
+    int id = width * y + x;
+
+
+    CTYPE z_new;
+    CTYPE deriv_;
+    CTYPE f_z;
+    CTYPE root;
+
+    bool skip;
+
+    CTYPE z;
+    z.x = data[id * 2 + 0];
+    z.y = data[id * 2 + 1];
+
+    for (int n_repetition = 0; n_repetition < repetitions; n_repetition++) {
+        skip = false;
+
+        if (!DISABLE_SKIP) {
+            for ( int i = 0; i < num_roots; i++ ) {
+                root.x = roots[i * 2 + 0];
+                root.y = roots[i * 2 + 1];
+                if (abs2(z - root) <= TOLERANCE) { skip = true; }
+            }
+        }
+
+        deriv_ = deriv(z);
+
+        f_z = func(z);
+
+        if (abs2(deriv_) <= TOLERANCE) { skip = true; }
+        if (skip && !DISABLE_SKIP) {  // consistency with cpu version  well that aged like milk...
+            deriv_.x = 1.0;
+            deriv_.y = 0.0;
+            f_z.x = 0.0;
+            f_z.y = 0.0;
+        }
+
+        z_new = z - div2(f_z, deriv_);
+
+        data[id * 2 + 0] = (double) z_new.x;
+        data[id * 2 + 1] = (double) z_new.y;
+
+        fvalues[id * 2 + 0] = (double) f_z.x;
+        fvalues[id * 2 + 1] = (double) f_z.y;
+
+        derivs[id * 2 + 0] = (double) deriv_.x;
+        derivs[id * 2 + 1] = (double) deriv_.y;
+
+        z = z_new;
+        if (skip) { break; }
+    }
 }

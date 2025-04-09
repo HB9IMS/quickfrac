@@ -48,7 +48,7 @@ def test_fractal(pathfile=sys.stdout):
     def update_xy():
         """update the frame coordinates"""
         nonlocal x1, x2, y1, y2, cx, cy, scale
-        x, y = dimensions[0] / 100 * scale, dimensions[1] / 100 * scale
+        x, y = dimensions[1] / 100 * scale, dimensions[0] / 100 * scale
         x1, y1 = cy + x, cx + y
         x2, y2 = cy - x, cx - y
 
@@ -161,24 +161,16 @@ def test_fractal(pathfile=sys.stdout):
                         print(f"{x1, y1}, {x2, y2}", file=pathfile)
                     case pg.K_x:
                         show_cross = not show_cross
-                # get mouse position on button press relative to fractal
-            if event.type == pg.MOUSEBUTTONDOWN and False:  # skip because broken_
+                # get mouse position on button press relative to fractal and move frame there
+            if event.type == pg.MOUSEBUTTONDOWN:  # skip because broken_
                 pos = pg.mouse.get_pos()
                 pos_ = np.array(pos) / np.array(dimensions)
-                pos__ = [_lerp(x1, x2, pos_[0]), _lerp(y1, y2, pos_[1])]
-                print(pos__)
-                fractal.rendered[pos[0]][pos[1]][0] ^= 0xff
-                fractal.rendered[pos[0]][pos[1]][1] ^= 0xff
-                fractal.rendered[pos[0]][pos[1]][2] ^= 0xff
-                if last_click_pos is not None and np.any(pos__ != last_click_pos):
-                    fractal = f_type(dimensions[0], dimensions[1], function,
-                                     frame_points=(last_click_pos[::-1], pos__[::-1])
-                                     )
-                    print(f"new: {(last_click_pos[::-1], pos__[::-1])}")
-                    do_iterate = False
-                    last_click_pos = None
-                else:
-                    last_click_pos = pos__
+                frame = np.array(fractal.frame)
+                pos__ = [*_lerp(frame[0, ::-1], frame[1, ::-1], pos_)]
+                cx, cy = pos__
+                update_xy()
+            if event.type == pg.MOUSEWHEEL:
+                scale *= 2 ** (event.y * 0.1)
         # draw fractal
         if do_iterate:
             fractal.iterate()
@@ -188,8 +180,8 @@ def test_fractal(pathfile=sys.stdout):
         frame = np.array(fractal.frame)
         xes = (x1, x2)
         ys = (y1, y2)
-        _point_list = [(_convert_point_to_pos(_y, frame[:, 1], dimensions[0]),
-                        _convert_point_to_pos(_x, frame[:, 0], dimensions[1]))
+        _point_list = [(_convert_point_to_pos(_y, frame[:, 1], dimensions[0] - 1),
+                        _convert_point_to_pos(_x, frame[:, 0], dimensions[1] - 1))
                        for _x in xes for _y in ys]
         for i in _point_list:
             for j in _point_list:
@@ -200,5 +192,5 @@ def test_fractal(pathfile=sys.stdout):
 
 
 if __name__ == '__main__':
-    with open("paths/path.txt", "w") as file:
+    with open("paths/path_.txt", "w") as file:
         test_fractal(file)

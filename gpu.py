@@ -11,6 +11,9 @@ import algos
 import graphical as gp
 
 
+GLOBAL_CONTEXT = cl.create_some_context()
+
+
 class GPUFractal(gp.Fractal):
     """
     A class for a fractal on the GPU
@@ -20,17 +23,17 @@ class GPUFractal(gp.Fractal):
                  function_,
                  frame_points,
                  symbol="z", dtype=np.complex128,
-                 kernel_path=None):
+                 kernel_path=None, function__=None, kernels=None):
         """initializer"""
         if kernel_path is None:
             kernel_path = "kernels"
         super().__init__(width, height,
                          function_,
                          frame_points,
-                         symbol, dtype
+                         symbol, dtype, function__
                          )
 
-        self.ctx = cl.create_some_context()
+        self.ctx = GLOBAL_CONTEXT
         self.queue = cl.CommandQueue(self.ctx, None)
         self.kernel_path = kernel_path
 
@@ -73,20 +76,23 @@ class GPUFractal(gp.Fractal):
         )
 
         # programs
-        with open(f"{kernel_path}/compute.cl") as f:
-            self.compute_program = cl.Program(
-                self.ctx,
-                f.read()
-                .replace("$f$", algos.sympy_to_opencl(self.function.function))
-                .replace("$d$", algos.sympy_to_opencl(self.function.derivative))
-            ).build()
-        print(repr(algos.sympy_to_opencl(self.function.function)), repr(self.function.function))
-        print(repr(algos.sympy_to_opencl(self.function.derivative)), repr(self.function.derivative))
+        if kernels is None:
+            with open(f"{kernel_path}/compute.cl") as f:
+                self.compute_program = cl.Program(
+                    self.ctx,
+                    f.read()
+                    .replace("$f$", algos.sympy_to_opencl(self.function.function))
+                    .replace("$d$", algos.sympy_to_opencl(self.function.derivative))
+                ).build()
+            print(repr(algos.sympy_to_opencl(self.function.function)), repr(self.function.function))
+            print(repr(algos.sympy_to_opencl(self.function.derivative)), repr(self.function.derivative))
 
-        with open(f"{kernel_path}/render.cl") as f:
-            self.render_program = cl.Program(
-                self.ctx, f.read()
-            ).build()
+            with open(f"{kernel_path}/render.cl") as f:
+                self.render_program = cl.Program(
+                    self.ctx, f.read()
+                ).build()
+        else:
+            self.compute_program, self.render_program = kernels
 
     def reload_compute_kernel(self):
         """
@@ -149,6 +155,43 @@ class GPUFractal(gp.Fractal):
             self.gpu_fvalues_buffer,
             self.gpu_derivs_buffer
         )
+        cl.enqueue_copy(
+            self.queue,
+            self.pixels,
+            self.pixel_buffer
+        )
+        cl.enqueue_copy(
+            self.queue,
+            self.gpu_derivs,
+            self.gpu_derivs_buffer,
+        )
+        cl.enqueue_copy(
+            self.queue,
+            self.gpu_fvalues,
+            self.gpu_fvalues_buffer
+        )
+        self.queue.finish()
+
+    def iterate_ntimes(self, n):
+        """
+        iterates the fractal n times
+        :param n: number of times to iterate
+        """
+        self.compute_program.step_n(
+            self.queue,
+            self.pixels.shape,
+            None,
+            self.pixel_buffer,
+            np.int32(self.pixels.shape[1]),
+            self.roots_buffer,
+            np.int32(self.function.roots.shape[0]),
+            self.gpu_fvalues_buffer,
+            self.gpu_derivs_buffer,
+            np.int32(n)
+        )
+
+    def finish_iterate(self):
+        """finish iterating (only needed with ntimes)"""
         cl.enqueue_copy(
             self.queue,
             self.pixels,
