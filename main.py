@@ -9,11 +9,12 @@ from PIL import Image
 
 import gpu
 from graphical import *
-from graphical import _convert_point_to_pos, _lerp
+from graphical import _convert_point_to_pos, lerp
 
 function = "z ** 3 - 1"
 GPU = True
 GUI = True
+ANTIALIAS = False
 FULLSCREEN = True
 
 
@@ -29,7 +30,9 @@ def test_fractal(pathfile=sys.stdout):
             size = (0, 0)
             screen = pg.display.set_mode(size, pg.FULLSCREEN)  # adapt for any screen
         else:
-            size = (640, 480)
+            k = 2
+            size = (640 * k, 480 * k)
+            del k
             screen = pg.display.set_mode(size)
 
         info = pg.display.Info()
@@ -57,7 +60,8 @@ def test_fractal(pathfile=sys.stdout):
     fractal = f_type(
         dimensions[0], dimensions[1],
         function,
-        frame_points=((x1, y1), (x2, y2))
+        frame_points=((x1, y1), (x2, y2)),
+        antialias=ANTIALIAS
     )
 
     def reset_fractal():
@@ -66,27 +70,32 @@ def test_fractal(pathfile=sys.stdout):
         cx, cy = 0, 0
         scale = 1
         update_xy()
-        fractal = f_type(dimensions[0], dimensions[1], function, frame_points=((x1, y1), (x2, y2)))
-        if GPU:
-            gpu.cl.enqueue_copy(fractal.queue, fractal.pixel_buffer, fractal.pixels)
+        fractal = f_type(dimensions[0], dimensions[1],
+                         function, frame_points=((x1, y1), (x2, y2)),
+                         antialias=ANTIALIAS
+                         )
+        # if GPU:
+        #     gpu.cl.enqueue_copy(fractal.queue, fractal.pixel_buffer, fractal.pixels)
 
     def reset_fractal_no_pos():
         """resets the fractal without changing position"""
         nonlocal fractal
-        fractal = f_type(dimensions[0], dimensions[1], function, frame_points=((x1, y1), (x2, y2)))
+        fractal.frame = ((x1, y1), (x2, y2))
+        fractal.reset()
+        fractal.render()
+        print(fractal.frame)
 
     this_time = 0
     if not GUI:
         fractal.iterate()
-        fractal.render_new()
+        fractal.render()
         Image.fromarray(
             fractal.rendered
         ).show()
         return
-    fractal.render_new()
+    fractal.render()
     do_iterate = False
     show_cross = True
-    last_click_pos = None
     while True:
         this_time, prev_time = time.perf_counter_ns(), this_time
         for event in pg.event.get():
@@ -100,7 +109,7 @@ def test_fractal(pathfile=sys.stdout):
                         return
                     case pg.K_i:
                         fractal.iterate()
-                        fractal.render_new()
+                        fractal.render()
                     case pg.K_SPACE:
                         do_iterate = not do_iterate
                     case pg.K_d:
@@ -116,16 +125,15 @@ def test_fractal(pathfile=sys.stdout):
                     case pg.K_r:
                         reset_fractal()
                         do_iterate = False
-                        last_click_pos = None
                     case pg.K_RETURN:
-                        fractal.render_new()
+                        fractal.render()
                     case pg.K_c:
                         if GPU:
                             fractal.render_cpu()
                     case pg.K_l:
                         if GPU:
                             fractal.iterate_cpu()
-                            fractal.render_new()
+                            fractal.render()
                     case pg.K_m:
                         if GPU:
                             fractal.iterate_cpu()
@@ -156,17 +164,17 @@ def test_fractal(pathfile=sys.stdout):
                         update_xy()
                     case pg.K_TAB:
                         reset_fractal_no_pos()
-                        fractal.render_new()
+                        fractal.render()
                     case pg.K_END:
-                        print(f"{x1, y1}, {x2, y2}", file=pathfile)
+                        print(f"{dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, {cx}, {cy}, {scale}", file=pathfile)
                     case pg.K_x:
                         show_cross = not show_cross
                 # get mouse position on button press relative to fractal and move frame there
-            if event.type == pg.MOUSEBUTTONDOWN:  # skip because broken_
+            if event.type == pg.MOUSEBUTTONDOWN:
                 pos = pg.mouse.get_pos()
                 pos_ = np.array(pos) / np.array(dimensions)
                 frame = np.array(fractal.frame)
-                pos__ = [*_lerp(frame[0, ::-1], frame[1, ::-1], pos_)]
+                pos__ = [*lerp(frame[0, ::-1], frame[1, ::-1], pos_)]
                 cx, cy = pos__
                 update_xy()
             if event.type == pg.MOUSEWHEEL:
@@ -174,7 +182,7 @@ def test_fractal(pathfile=sys.stdout):
         # draw fractal
         if do_iterate:
             fractal.iterate()
-            fractal.render_new()
+            fractal.render()
         fractal.draw(screen)
         # draw fps
         frame = np.array(fractal.frame)

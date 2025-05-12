@@ -3,11 +3,14 @@ This module contains functions for plotting and displaying data.
 removed from main.py to avoid circular imports
 """
 
-import numpy as np
-from typing_extensions import deprecated
 import colorsys
-import algos as alg
+
+import matplotlib.colors as mpl_colors
+import numpy as np
 import pygame as pg
+from typing_extensions import deprecated
+
+import algos as alg
 
 
 def unitprint(value, /, unit=None, power=None):
@@ -36,7 +39,7 @@ def unitprint(value, /, unit=None, power=None):
            f"{(f'^{power}' if power is not None else '')}"
 
 
-def _lerp(a, b, t):
+def lerp(a, b, t):
     """linear interpolation"""
     return a + (b - a) * t
 
@@ -95,10 +98,7 @@ def complex_to_rgb_unlimited(z, scale=1):
 
 
 def _convert_point_to_pos(pos, frame_values, screen_value):
-    return _lerp(0, screen_value, (pos - frame_values[0]) / (frame_values[1] - frame_values[0]))
-
-
-import matplotlib.colors as mpl_colors
+    return lerp(0, screen_value, (pos - frame_values[0]) / (frame_values[1] - frame_values[0]))
 
 
 class Fractal:
@@ -134,15 +134,11 @@ class Fractal:
         self._symbol = symbol
         self.dtype = dtype
         self.frame = frame_points
-        self.pixels = np.array(
-            [[
-                _lerp(self.frame[0][0], self.frame[1][0], j / self.height)
-                + _lerp(self.frame[0][1], self.frame[1][1], i / self.width) * 1j
-                for j in range(height)] for i in range(width)],
-            dtype=dtype
-        )
-        self.fvalues = np.zeros_like(self.pixels)
-        self.derivs = np.zeros_like(self.pixels)
+
+        x = np.linspace(self.frame[0][0], self.frame[1][0], height)
+        y = np.linspace(self.frame[0][1], self.frame[1][1], width) * 1j
+        self.pixels = (x[None, :] + y[:, None]).astype(dtype)
+
         self.rendered = np.ones((width, height, 3), dtype=np.uint8)
         self.rendered_full = np.ones((width, height, 3), dtype=np.uint32)
 
@@ -157,7 +153,7 @@ class Fractal:
         )
 
     @timed
-    def render_new(self):
+    def render(self):
         """faster renderer"""
         h = np.clip((np.angle(self.pixels) % (2 * np.pi)) / 2 / np.pi, 0, 1)
         s = np.clip(np.ones_like(h), 0, 1)
@@ -167,7 +163,7 @@ class Fractal:
 
     @timed
     @deprecated("use render_new(); faster")
-    def render(self):
+    def render_legacy(self):
         """
         renders the fractal to internal array
         """
@@ -208,3 +204,15 @@ class Fractal:
         for i in range(self.height):
             for j in range(self.width):
                 screen.set_at((i, j), self.rendered[j, i])
+
+    def reset(self):
+        """resets the fractal"""
+
+        x = np.linspace(self.frame[0][0], self.frame[1][0], self.height)
+        y = np.linspace(self.frame[0][1], self.frame[1][1], self.width) * 1j
+        self.pixels = (x[None, :] + y[:, None]).astype(self.dtype)
+
+        self.rendered = np.ones((self.width, self.height, 3), dtype=np.uint8)
+        self.rendered_full = np.ones((self.width, self.height, 3), dtype=np.uint32)
+
+        self.render()

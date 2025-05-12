@@ -124,3 +124,36 @@ __kernel void render(__global uchar *pixels,
     pixels[3 * id + 1] = res.y;
     pixels[3 * id + 2] = res.z;
 }
+
+__kernel void render_subpixel_aa(__global uchar *pixels,
+                                 __global double *data,
+                                 const int width) {
+
+    int x_ = get_global_id(0);
+    int y_ = get_global_id(1);
+    int z_ = get_global_id(2);
+    int id = width * x_ + 3 * y_ + z_;
+
+    float2 z;
+    z.x = data[id * 2 + 0];
+    z.y = data[id * 2 + 1];
+
+    float norm = sqrt( z.x * z.x + z.y * z.y );
+    float angle = atan2( (float) z.y, (float) z.x) / (2 * M_PI);
+    while (angle < 0) {
+        angle += 1;
+    }
+    while (angle > 1) {
+        angle -= 1;
+    }
+
+    PIXTYPE res;
+
+    res = Polar_to_RGB(angle, norm);
+
+    switch ( z_ ) {
+        case 0: pixels[id] = res.x; break;
+        case 1: pixels[id] = res.y; break;
+        case 2: pixels[id] = res.z; break;
+    }
+}

@@ -1,3 +1,5 @@
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+
 #define TOLERANCE 1e-29
 #define CTYPE double2
 #define DISABLE_SKIP true
@@ -56,9 +58,7 @@ inline CTYPE deriv(CTYPE z) {
 __kernel void step(__global double *data, 
                    const int width,
                    __global double *roots,
-                   const int num_roots,
-                   __global double *derivs,
-                   __global double *fvalues) {
+                   const int num_roots) {
 
     int y = get_global_id(0);
     int x = get_global_id(1);
@@ -97,20 +97,18 @@ __kernel void step(__global double *data,
 
     data[id * 2 + 0] = (double) z_new.x;
     data[id * 2 + 1] = (double) z_new.y;
-
+/*
     fvalues[id * 2 + 0] = (double) f_z.x;
     fvalues[id * 2 + 1] = (double) f_z.y;
 
     derivs[id * 2 + 0] = (double) deriv_.x;
-    derivs[id * 2 + 1] = (double) deriv_.y;
+    derivs[id * 2 + 1] = (double) deriv_.y;*/
 }
 
 __kernel void step_n(__global double *data,
                      const int width,
                      __global double *roots,
                      const int num_roots,
-                     __global double *derivs,
-                     __global double *fvalues,
                      const int repetitions) {
 
     int y = get_global_id(0);
@@ -156,13 +154,13 @@ __kernel void step_n(__global double *data,
 
         data[id * 2 + 0] = (double) z_new.x;
         data[id * 2 + 1] = (double) z_new.y;
-
+/*
         fvalues[id * 2 + 0] = (double) f_z.x;
         fvalues[id * 2 + 1] = (double) f_z.y;
 
         derivs[id * 2 + 0] = (double) deriv_.x;
         derivs[id * 2 + 1] = (double) deriv_.y;
-
+*/
         z = z_new;
         if (skip) { break; }
     }
