@@ -83,7 +83,7 @@ def test_fractal(pathfile=sys.stdout):
         fractal.frame = ((x1, y1), (x2, y2))
         fractal.reset()
         fractal.render()
-        print(fractal.frame)
+        # print(fractal.frame)
 
     this_time = 0
     if not GUI:
@@ -96,6 +96,9 @@ def test_fractal(pathfile=sys.stdout):
     fractal.render()
     do_iterate = False
     show_cross = True
+
+    c = 0
+
     while True:
         this_time, prev_time = time.perf_counter_ns(), this_time
         for event in pg.event.get():
@@ -138,9 +141,6 @@ def test_fractal(pathfile=sys.stdout):
                         if GPU:
                             fractal.iterate_cpu()
                             fractal.render_cpu()
-                    case pg.K_y:
-                        if GPU:
-                            fractal.show_differences()
                     case pg.K_DOLLAR:
                         function = input(function)
                         reset_fractal()
@@ -162,11 +162,22 @@ def test_fractal(pathfile=sys.stdout):
                     case pg.K_PAGEDOWN:
                         scale /= 2 ** .5
                         update_xy()
+                    case pg.K_1:
+                        scale /= 8
+                        update_xy()
+                    case pg.K_2:
+                        scale *= 8
+                        update_xy()
                     case pg.K_TAB:
                         reset_fractal_no_pos()
                         fractal.render()
+                        c = 0
                     case pg.K_END:
-                        print(f"{dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, {cx}, {cy}, {scale}", file=pathfile)
+                        print(f"{dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, {cx}, {cy}, {scale}",
+                              file=pathfile
+                              )
+                        print(c)
+                        c = 0
                     case pg.K_x:
                         show_cross = not show_cross
                 # get mouse position on button press relative to fractal and move frame there
@@ -181,6 +192,7 @@ def test_fractal(pathfile=sys.stdout):
                 scale *= 2 ** (event.y * 0.1)
         # draw fractal
         if do_iterate:
+            c += 1
             fractal.iterate()
             fractal.render()
         fractal.draw(screen)

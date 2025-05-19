@@ -4,11 +4,10 @@
 """
 tool for rendering paths
 """
-import sys
 
 import numpy as np
 import pyopencl as cl
-from alive_progress import alive_bar
+from tqdm import tqdm
 
 import algos
 import gpu
@@ -17,6 +16,8 @@ STEPS = 90
 NTIMES = 1000
 FPS = 3
 
+HOLD_AT_END = True
+OUT_FILE_NAME = "output.mp4"
 RENDER_TYPE = "np"
 
 
@@ -32,6 +33,8 @@ def _array_to_mp4(video_array: np.ndarray, output_path: str, fps: int = 30):
     if video_array.ndim != 4:
         raise ValueError("Input array must be 4D with shape (frames, height, width, 3)")
 
+    video_array = video_array.transpose(0, 2, 1, 3)
+
     num_frames, height, width, channels = video_array.shape
 
     # Normalize data if needed
@@ -42,12 +45,15 @@ def _array_to_mp4(video_array: np.ndarray, output_path: str, fps: int = 30):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-    with alive_bar(num_frames) as bar:
-        for frame in video_array:
-            # Convert RGB to BGR for OpenCV
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    for frame in tqdm(video_array):
+        # Convert RGB to BGR for OpenCV
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        out.write(frame_bgr)
+
+    if HOLD_AT_END:
+        frame_bgr = cv2.cvtColor(video_array[-1], cv2.COLOR_RGB2BGR)
+        for i in range(fps):
             out.write(frame_bgr)
-            bar()
 
     out.release()
     cv2.destroyAllWindows()
@@ -63,9 +69,9 @@ def _show(rendered):
         for i in images:
             i.show()
     elif RENDER_TYPE == "video":
-        _array_to_mp4(np.array(rendered), "output.mp4", FPS)
+        _array_to_mp4(np.array(rendered), OUT_FILE_NAME, FPS)
     elif RENDER_TYPE == "np":
-        np.array(rendered).dump("output.npz")
+        np.array(rendered).dump(OUT_FILE_NAME)
 
 
 def _geometric0_interpolation(a, b, t):
@@ -83,9 +89,9 @@ def _generate_points_between(frames, steps):
     length_x, length_y, *cstart, scstart = start
     _, _, *cstop, scstop = stop
     total_vec = np.array(cstop) - cstart
-    scales = [_geometric0_interpolation(scstart, scstop, 1 - i / steps)
+    scales = [_geometric0_interpolation(scstart, scstop, i / steps)
               for i in range(steps)]
-    movement_scaling_factor = np.linalg.norm(total_vec) / sum(scales)
+    movement_scaling_factor = 1 / sum(scales)
     centers = [cstart + total_vec * sum(scales[:i]) * movement_scaling_factor
                for i in range(steps)]
     res = [[[cy + length_x * scale, cx + length_y * scale],
@@ -98,7 +104,8 @@ def generate_more_points(path, bar=None):
     for i in zip(path[:-1], path[1:]):
         for j in _generate_points_between(i, STEPS):
             yield j
-            bar()
+            if bar is not None:
+                bar()
 
 
 def render(path, resolution=None, function=None):
@@ -114,36 +121,86 @@ def render(path, resolution=None, function=None):
     with open(f"kernels/compute.cl") as f:
         compute_program = cl.Program(
             gpu.GLOBAL_CONTEXT,
-            f.read()
+            ("#define DOUBLE\n" if gpu.DOUBLE else "")
+            + f.read()
             .replace("$f$", algos.sympy_to_opencl(function_.function))
             .replace("$d$", algos.sympy_to_opencl(function_.derivative))
         ).build()
 
     with open(f"kernels/render.cl") as f:
         render_program = cl.Program(
-            gpu.GLOBAL_CONTEXT, f.read()
+            gpu.GLOBAL_CONTEXT,
+            ("#define DOUBLE\n" if gpu.DOUBLE else "")
+                                                  + f.read()
         ).build()
-    with alive_bar(STEPS * (len(path_points) - 1)) as bar:
-        fractals = [
-            gpu.GPUFractal(
-                *resolution,
-                function,
-                frame_points=i, function__=function_,
-                kernels=(compute_program, render_program)
-            ) for i in generate_more_points(path_points, bar=bar)
-        ]
-    with alive_bar(len(fractals)) as bar:
-        for i in fractals:
-            i.iterate_ntimes(NTIMES)
-            bar()
+    fractals = [
+        gpu.GPUFractal(
+            *resolution,
+            function,
+            frame_points=i, function__=function_,
+            kernels=(compute_program, render_program)
+        ) for i in tqdm(generate_more_points(path_points))
+    ]
+    for i in tqdm(fractals):
+        i.iterate_ntimes(NTIMES)
 
-    with alive_bar(len(fractals)) as bar:
-        for i in fractals:
-            i.finish_iterate()
-            i.render()
-            bar()
+    for i in tqdm(fractals):
+        i.finish_iterate()
+        i.render()
 
-    _show([x.rendered for x in fractals])
+    _show([x_.rendered for x_ in fractals])
+
+
+def render_sequential(path, resolution=None, function=None, num_workers=1):
+    """renders each point from the path, one after the other (for memory)"""
+    if resolution is None:
+        resolution = (1280, 960)
+    if function is None:
+        function = "z ** 3 - 1"
+    with open(path, "r") as f:
+        path_strings = f.read().splitlines()
+        path_points = [eval(i) for i in path_strings]
+    function_ = algos.Function(function, "z")
+    with open(f"kernels/compute.cl") as f:
+        compute_program = cl.Program(
+            gpu.GLOBAL_CONTEXT,
+            ("#define DOUBLE\n" if gpu.DOUBLE else "")
+            + f.read()
+            .replace("$f$", algos.sympy_to_opencl(function_.function))
+            .replace("$d$", algos.sympy_to_opencl(function_.derivative))
+        ).build()
+
+    with open(f"kernels/render.cl") as f:
+        render_program = cl.Program(
+            gpu.GLOBAL_CONTEXT,
+            ("#define DOUBLE\n" if gpu.DOUBLE else "")
+            + f.read()
+        ).build()
+
+    fractals = [
+        gpu.GPUFractal(
+            *resolution,
+            function, function__=function_,
+            frame_points=[[1, 1], [0, 0]],
+            kernels=(compute_program, render_program)
+        ) for _ in range(num_workers)
+    ]
+
+    results = []
+    points = list(generate_more_points(path_points))
+
+    for i in tqdm(range(0, len(points), num_workers)):
+        batch = points[i:i + num_workers]
+        for fractal, point in zip(fractals, batch):
+            fractal.frame = point
+            fractal.reset()
+            fractal.iterate_ntimes(NTIMES)
+        for fractal in fractals:
+            fractal.finish_iterate()
+            fractal.render()
+            results.append(fractal.rendered.copy())
+
+    _show(results)
 
 
 class PGVideoPlayer:
@@ -164,18 +221,29 @@ class PGVideoPlayer:
 
 
 if __name__ == "__main__":
-    if "-i" in sys.argv:
-        sys.argv.remove("-i")
-        RENDER_TYPE = "image"
-    if "-v" in sys.argv:
-        RENDER_TYPE = "video"
-        sys.argv.remove("-v")
-    if "-z" in sys.argv:
-        RENDER_TYPE = "np"
-        sys.argv.remove("-z")
-    if "-p" in sys.argv:
-        RENDER_TYPE = "pygame"
-        sys.argv.remove("-p")
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Fractal renderer')
+    x = parser.add_argument
+    x('-i', '--image', action='store_const', const='image', dest='render_type', help='Render as image')
+    x('-v', '--video', action='store_const', const='video', dest='render_type', help='Render as video')
+    x('-z', '--numpy', action='store_const', const='np', dest='render_type', help='Render as numpy array')
+    x('-p', '--pygame', action='store_const', const='pygame', dest='render_type', help='Render using pygame')
+    x('--sequential', action='store_true', help='Use sequential rendering')
+    x('-w', '--workers', type=int, default=1, dest='workers', help='Number of workers')
+    x('-f', '--path', type=str, default='paths/path_.txt', dest='path', help='Path to path')
+    x('-o', '--output', type=str, default='output', dest='output', help='Output file name')
+    x('function', nargs='?', default=None, help='Function to render')
+    x('resolution', nargs='?', type=eval, default=None, help='Resolution')
+    x('fps', nargs='?', type=eval, help='Frames per second')
+    x('steps', nargs='?', type=eval, help='Number of steps')
+    x('ntimes', nargs='?', type=eval, help='Number of iterations')
+
+    args = parser.parse_args()
+
+    RENDER_TYPE = args.render_type
+    renderer = render_sequential if args.sequential else render
+    OUT_FILE_NAME = args.output
 
     if RENDER_TYPE == "image":
         from PIL import Image
@@ -188,10 +256,15 @@ if __name__ == "__main__":
     else:
         raise ValueError("invalid render type")
 
-    render("paths/path_.txt",
-           function=(sys.argv[1] if len(sys.argv) > 1
-                     else None),
-           resolution=eval(sys.argv[2] if len(sys.argv) > 2
-                           else "None"
-                           )
-           )
+    if args.fps is not None:
+        FPS = args.fps
+    if args.steps is not None:
+        STEPS = args.steps
+    if args.ntimes is not None:
+        NTIMES = args.ntimes
+
+    renderer(args.path,
+             function=args.function,
+             resolution=args.resolution,
+             num_workers=args.workers
+             )

@@ -1,3 +1,10 @@
+
+#ifdef DOUBLE
+#define DTYPE double
+#else
+#define DTYPE float
+#endif
+
 #define PIXTYPE uchar3
 
 
@@ -79,7 +86,7 @@ PIXTYPE Polar_to_RGB( float ang, float mag ) {
 }
 
 __kernel void render(__global uchar *pixels,
-                     __global double *data,
+                     __global DTYPE *data,
                      const int width) {
 
     int y = get_global_id(0);
@@ -126,7 +133,7 @@ __kernel void render(__global uchar *pixels,
 }
 
 __kernel void render_subpixel_aa(__global uchar *pixels,
-                                 __global double *data,
+                                 __global DTYPE *data,
                                  const int width) {
 
     int x_ = get_global_id(0);
