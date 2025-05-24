@@ -36,7 +36,8 @@ if __name__ == "__main__":
     x('-f', '--function', type=str, default="UNSET", help='The function to render')
     x('-r', '--resolution', type=int, nargs=2, default=(1280, 960), help='The resolution of the image')
     x('-n', '--ntimes', type=int, default=100, help='The number of iterations')
-    x('-o', '--output', type=str, default="outputs/output_{idx}.png", help='The output file with {idx} as the index')
+    x('-o', '--output', type=str, default="outputs/output_{idx}.png", 
+      help='The output file with {idx} as the index')
     x('-p', '--path', type=str, default="./paths/path_.txt", help='The path to the path file')
 
     args = parser.parse_args()

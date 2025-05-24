@@ -193,9 +193,9 @@ class GPUFractal(gp.Fractal):
         """resets the fractal"""
         super().reset()
         if self.antialias:
-            x_values = np.linspace(self.frame[0][0], self.frame[1][0], self.height * 3, dtype=np.float64)
-            y_values = np.linspace(self.frame[0][1], self.frame[1][1], self.width, dtype=np.float64)
-            self.pixels = (np.array(np.meshgrid(x_values, y_values))
+            x_vals = np.linspace(self.frame[0][0], self.frame[1][0], self.height * 3, dtype=np.float64)
+            y_vals = np.linspace(self.frame[0][1], self.frame[1][1], self.width, dtype=np.float64)
+            self.pixels = (np.array(np.meshgrid(x_vals, y_vals))
                            .transpose(2, 1, 0)
                            .reshape(-1)
                            .view(self.dtype)

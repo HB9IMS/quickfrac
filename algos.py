@@ -222,7 +222,8 @@ def sympy_to_opencl(expr_, variable='z'):
                     for term in complex_terms[1:]:
                         result = f"mul2({result}, {self._print(term)})"
                     # Then multiply by the numeric coefficient
-                    return f"((CTYPE)({numeric_coefficient} * {result}.x, {numeric_coefficient} * {result}.y))"
+                    return (f"((CTYPE)({numeric_coefficient} * {result}.x,"
+                            f"{numeric_coefficient} * {result}.y))")
 
             # If we only have a numeric coefficient
             if not complex_terms:

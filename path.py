@@ -27,7 +27,8 @@ def _array_to_mp4(video_array: np.ndarray, output_path: str, fps: int = 30):
     Convert a 4D numpy array to an MP4 video.
 
     Parameters:
-    - video_array (np.ndarray): A 4D numpy array of shape (frames, height, width, channels), channels must be 3 (RGB).
+    - video_array (np.ndarray): A 4D numpy array of shape (frames, height, width, channels),
+        channels must be 3 (RGB).
     - output_path (str): Path to the output .mp4 file.
     - fps (int): Frames per second for the output video.
     """

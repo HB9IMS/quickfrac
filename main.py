@@ -173,7 +173,8 @@ def test_fractal(pathfile=sys.stdout):
                         fractal.render()
                         c = 0
                     case pg.K_END:
-                        print(f"{dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, {cx}, {cy}, {scale}",
+                        print(f"{dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, "
+                              f"{cx}, {cy}, {scale}",
                               file=pathfile
                               )
                         print(c)
