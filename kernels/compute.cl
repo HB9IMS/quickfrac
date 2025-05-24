@@ -9,7 +9,6 @@
 #endif
 
 #define TOLERANCE 0 /*1e-29*/
-#define DISABLE_SKIP true
 #define cpow_fake cpow  // dylans idee
 
 inline CTYPE mul2(CTYPE a, CTYPE b) {
@@ -64,9 +63,7 @@ inline CTYPE deriv(CTYPE z) {
 
 
 __kernel void step(__global DTYPE *data, 
-                   const int width,
-                   __global DTYPE *roots,
-                   const int num_roots) {
+                   const int width) {
 
     int y = get_global_id(0);
     int x = get_global_id(1);
@@ -78,26 +75,11 @@ __kernel void step(__global DTYPE *data,
 
     bool skip = false;
 
-    if (!DISABLE_SKIP) {
-        for ( int i = 0; i < num_roots; i++ ) {
-            CTYPE root;
-            root.x = roots[i * 2 + 0];
-            root.y = roots[i * 2 + 1];
-            if (abs2(z - root) <= TOLERANCE) { skip = true; }
-        }
-    }
-
     CTYPE deriv_ = deriv(z);
 
     CTYPE f_z = func(z);
 
     if (abs2(deriv_) <= TOLERANCE) { skip = true; }
-    if (skip && !DISABLE_SKIP) {  // consistency with cpu version  well that aged like milk...
-        deriv_.x = 1.0;
-        deriv_.y = 0.0;
-        f_z.x = 0.0;
-        f_z.y = 0.0;
-    }
 
     CTYPE z_new;
 
@@ -115,8 +97,6 @@ __kernel void step(__global DTYPE *data,
 
 __kernel void step_n(__global DTYPE *data,
                      const int width,
-                     __global DTYPE *roots,
-                     const int num_roots,
                      const int repetitions) {
 
     int y = get_global_id(0);
@@ -138,25 +118,11 @@ __kernel void step_n(__global DTYPE *data,
     for (int n_repetition = 0; n_repetition < repetitions; n_repetition++) {
         skip = false;
 
-        if (!DISABLE_SKIP) {
-            for ( int i = 0; i < num_roots; i++ ) {
-                root.x = roots[i * 2 + 0];
-                root.y = roots[i * 2 + 1];
-                if (abs2(z - root) <= TOLERANCE) { skip = true; }
-            }
-        }
-
         deriv_ = deriv(z);
 
         f_z = func(z);
 
         if (abs2(deriv_) <= TOLERANCE) { skip = true; }
-        if (skip && !DISABLE_SKIP) {  // consistency with cpu version  well that aged like milk...
-            deriv_.x = 1.0;
-            deriv_.y = 0.0;
-            f_z.x = 0.0;
-            f_z.y = 0.0;
-        }
 
         z_new = z - div2(f_z, deriv_);
 

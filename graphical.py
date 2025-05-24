@@ -4,9 +4,12 @@ removed from main.py to avoid circular imports
 """
 
 import colorsys
+import os
 
 import matplotlib.colors as mpl_colors
 import numpy as np
+
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame as pg
 from typing_extensions import deprecated
 

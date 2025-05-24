@@ -79,12 +79,6 @@ class GPUFractal(gp.Fractal):
             self.rendered.nbytes,
             hostbuf=self.rendered
         )
-        self.roots_buffer = cl.Buffer(
-            self.ctx,
-            cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,
-            self.function.roots.nbytes,
-            hostbuf=self.function.roots
-        )
 
         # programs
         if kernels is None:
@@ -107,7 +101,6 @@ class GPUFractal(gp.Fractal):
                 ).build()
         else:
             self.compute_program, self.render_program = kernels
-        print(self.dtype, self.pixels.dtype)
 
     def reload_compute_kernel(self):
         """
@@ -184,8 +177,6 @@ class GPUFractal(gp.Fractal):
             None,
             self.pixel_buffer,
             np.int32(self.pixels.shape[1]),
-            self.roots_buffer,
-            np.int32(self.function.roots.shape[0]),
             np.int32(n)
         )
 

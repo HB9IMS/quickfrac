@@ -10,6 +10,7 @@ import pyopencl as cl
 from tqdm import tqdm
 
 import algos
+import debug
 import gpu
 
 STEPS = 90
@@ -17,7 +18,7 @@ NTIMES = 1000
 FPS = 3
 
 HOLD_AT_END = True
-OUT_FILE_NAME = "output.mp4"
+OUT_FILE_NAME = "outputs/output.mp4"
 RENDER_TYPE = "np"
 
 
@@ -64,7 +65,7 @@ def _show(rendered):
     """shows the rendered fractals"""
     if RENDER_TYPE == "image":
         images = [
-            Image.fromarray(x.transpose(1, 0, 2)) for x in rendered
+            Image.fromarray(x_.transpose(1, 0, 2)) for x_ in rendered
         ]
         for i in images:
             i.show()
@@ -85,6 +86,7 @@ def _geometric0_interpolation(a, b, t):
 
 
 def _generate_points_between(frames, steps):
+    # fmt of input {dimensions[1] / 100 * scale}, {dimensions[0] / 100 * scale}, {cx}, {cy}, {scale}
     start, stop = np.array(frames)
     length_x, length_y, *cstart, scstart = start
     _, _, *cstop, scstop = stop
@@ -94,8 +96,15 @@ def _generate_points_between(frames, steps):
     movement_scaling_factor = 1 / sum(scales)
     centers = [cstart + total_vec * sum(scales[:i]) * movement_scaling_factor
                for i in range(steps)]
-    res = [[[cy + length_x * scale, cx + length_y * scale],
-            [cy - length_x * scale, cx - length_y * scale]] for ((cx, cy), scale) in zip(centers, scales)]
+    res = [[[cy + length_x * scale / scstart, cx + length_y * scale / scstart],
+            [cy - length_x * scale / scstart, cx - length_y * scale / scstart]] for ((cx, cy), scale) in zip(centers, scales)]
+    if debug.DEBUG:
+        print(f"scale: {scales}")
+        print(f"centers: {centers}")
+        print(f"movement_scaling_factor: {movement_scaling_factor}")
+        print(f"res: {res}")
+        print(f"exporting to ./DEBUG/path_{debug.tick_counter()}.npz")
+        np.savez_compressed(f"./DEBUG/path_{debug.VARIABLES.c}.npz", res=res)
     return res
 
 
@@ -108,7 +117,7 @@ def generate_more_points(path, bar=None):
                 bar()
 
 
-def render(path, resolution=None, function=None):
+def render(path, resolution=None, function=None, num_workers=None):
     """renders each point from the path"""
     if resolution is None:
         resolution = (1280, 960)
@@ -131,7 +140,7 @@ def render(path, resolution=None, function=None):
         render_program = cl.Program(
             gpu.GLOBAL_CONTEXT,
             ("#define DOUBLE\n" if gpu.DOUBLE else "")
-                                                  + f.read()
+            + f.read()
         ).build()
     fractals = [
         gpu.GPUFractal(
@@ -204,6 +213,8 @@ def render_sequential(path, resolution=None, function=None, num_workers=1):
 
 
 class PGVideoPlayer:
+    """unused"""
+
     def __init__(self, array):
         self.array = array
         self.fps = FPS
@@ -213,6 +224,7 @@ class PGVideoPlayer:
         self.screen = pg.display.set_mode(array[0].shape[:2])
 
     def run(self):
+        """unused"""
         pg.surfarray.blit_array(self.screen, self.array[self.frame])
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -238,6 +250,7 @@ if __name__ == "__main__":
     x('fps', nargs='?', type=eval, help='Frames per second')
     x('steps', nargs='?', type=eval, help='Number of steps')
     x('ntimes', nargs='?', type=eval, help='Number of iterations')
+    x('-d', '--debug', action='store_true', dest="debug", help='Manually activate debug mode')
 
     args = parser.parse_args()
 
@@ -245,9 +258,16 @@ if __name__ == "__main__":
     renderer = render_sequential if args.sequential else render
     OUT_FILE_NAME = args.output
 
+    if args.debug:
+        debug.DEBUG = True
+        debug.debug_print("Debug mode activated")
+
     if RENDER_TYPE == "image":
         from PIL import Image
     elif RENDER_TYPE == "pygame":
+        import os
+
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
         import pygame as pg
     elif RENDER_TYPE == "video":
         import cv2

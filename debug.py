@@ -8,6 +8,7 @@ Debugging utilities
 
 import os
 import sys
+import pmutils
 
 DEBUG = ((hasattr(sys, 'gettrace')  # check if in debug mode
           and sys.gettrace() is not None)
@@ -15,8 +16,9 @@ DEBUG = ((hasattr(sys, 'gettrace')  # check if in debug mode
 print(f"""
 DEBUG TOOL IMPORTED
 DEBUG MODE IS {"ACTIVE" if DEBUG else "INACTIVE"}
-"""
-      )
+""")
+
+VARIABLES = pmutils.Namespace(c=0)
 
 DEBUG_INITIATOR = "breakpoint"
 
@@ -30,6 +32,12 @@ def debug_print(*args, **kwargs):
     """print if in debug mode"""
     if DEBUG:
         print(*args, **kwargs)
+
+
+def tick_counter():
+    """increment the counter at VARIABLES.c and return the new value"""
+    VARIABLES.c += 1
+    return VARIABLES.c
 
 
 def cond_breakpoint():
