@@ -98,7 +98,8 @@ def _generate_points_between(frames, steps):
     centers = [cstart + total_vec * sum(scales[:i]) * movement_scaling_factor
                for i in range(steps)]
     res = [[[cy + length_x * scale / scstart, cx + length_y * scale / scstart],
-            [cy - length_x * scale / scstart, cx - length_y * scale / scstart]] for ((cx, cy), scale) in zip(centers, scales)]
+            [cy - length_x * scale / scstart, cx - length_y * scale / scstart]] for ((cx, cy), scale) in
+           zip(centers, scales)]
     if debug.DEBUG:
         print(f"scale: {scales}")
         print(f"centers: {centers}")

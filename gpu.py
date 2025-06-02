@@ -35,7 +35,7 @@ class GPUFractal(gp.Fractal):
                  frame_points,
                  symbol="z", dtype=None,
                  kernel_path=None, function__=None, kernels=None,
-                 antialias=False):
+                 antialias=False, array_in=None):
         """initializer"""
         if dtype is None:
             dtype = np.complex128 if DOUBLE else np.complex64
@@ -59,6 +59,8 @@ class GPUFractal(gp.Fractal):
             y = np.linspace(self.frame[0][1], self.frame[1][1], self.width * 3) * 1j
             self.pixels = (x[None, :] + y[:, None]).astype(self.dtype)
 
+        if array_in is not None:
+            self.pixels = array_in
         self.ctx = GLOBAL_CONTEXT
         self.queue = cl.CommandQueue(self.ctx, None)
         self.kernel_path = kernel_path
