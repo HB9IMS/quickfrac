@@ -8,7 +8,7 @@ Debugging utilities
 
 import os
 import sys
-import pmutils
+import hb9imsutils
 
 DEBUG = ((hasattr(sys, 'gettrace')  # check if in debug mode
           and sys.gettrace() is not None)
@@ -18,7 +18,7 @@ DEBUG TOOL IMPORTED
 DEBUG MODE IS {"ACTIVE" if DEBUG else "INACTIVE"}
 """)
 
-VARIABLES = pmutils.Namespace(c=0)
+VARIABLES = hb9imsutils.Namespace(c=0)
 
 DEBUG_INITIATOR = "breakpoint"
 
